@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="carbon">#0A0B0E</color>
+    <color name="pit_red">#E10600</color>
+
+    <style name="Theme.PitWall" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/carbon</item>
+        <item name="android:colorPrimary">@color/carbon</item>
+        <item name="android:colorPrimaryDark">@color/carbon</item>
+        <item name="android:colorAccent">@color/pit_red</item>
+        <item name="android:statusBarColor">@color/carbon</item>
+        <item name="android:navigationBarColor">@color/carbon</item>
+    </style>
+</resources>

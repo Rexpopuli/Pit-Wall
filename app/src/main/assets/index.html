@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pit Wall</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Saira+Condensed:ital,wght@0,500;0,700;0,800;1,800&family=Titillium+Web:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+/* Layout: pit-wall timing screen. Timing tower on the left, analysis panel on the right, kerb stripe under the event header. */
+:root{
+  --carbon:#0a0b0e; --panel:#121419; --panel-2:#191c23; --line:#252932; --fg:#eef0f3; --muted:#8a919c;
+  --red:#e10600; --purple:#b44dff; --green:#20d46b; --yellow:#ffd60a;
+  --display:'Saira Condensed','Arial Narrow',Arial,sans-serif;
+  --body:'Titillium Web','Segoe UI',system-ui,sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,Consolas,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{background:var(--carbon);color:var(--fg);font:15px/1.5 var(--body);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 32px}
+button,select{font:inherit;color:var(--fg)}
+:focus-visible{outline:2px solid var(--yellow);outline-offset:2px}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* Top bar */
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px;padding-block:14px;max-width:1440px;margin:0 auto}
+.brand{display:flex;align-items:center;gap:10px;font:italic 800 26px/1 var(--display);letter-spacing:.02em;text-transform:uppercase}
+.brand-mark{width:34px;height:22px;background:var(--red);transform:skewX(-18deg);display:grid;place-items:center}
+.brand-mark span{transform:skewX(18deg);font-size:14px;color:#fff}
+.pickers{display:flex;flex-wrap:wrap;gap:8px;margin-left:auto}
+.field{display:flex;flex-direction:column;gap:2px}
+.field label{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700}
+select{background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:7px 30px 7px 10px;min-width:0;max-width:260px;
+  appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);
+  background-position:calc(100% - 15px) 52%,calc(100% - 10px) 52%;background-size:5px 5px;background-repeat:no-repeat;cursor:pointer}
+select:hover{border-color:#3a404c}
+.busy{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);min-height:20px}
+.busy .dot{width:8px;height:8px;border-radius:50%;background:var(--green)}
+.busy.on .dot{background:var(--yellow);animation:pulse .8s infinite alternate}
+.busy.err{color:#ff8a80}.busy.err .dot{background:var(--red)}
+@keyframes pulse{to{opacity:.25}}
+
+/* Hero */
+.hero{max-width:1440px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:20px;align-items:end;padding-block:18px 16px}
+.eyebrow{font-size:12px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--red)}
+.hero h1{margin:2px 0 4px;font:italic 800 clamp(34px,6vw,64px)/.95 var(--display);text-transform:uppercase;letter-spacing:.01em;text-wrap:balance}
+.hero .sub{color:var(--muted);font-size:15px}
+.hero .sub b{color:var(--fg);font-weight:600}
+.facts{display:flex;gap:10px;flex-wrap:wrap}
+.fact{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 14px;min-width:150px}
+.fact .k{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.fact .v{font:700 20px/1.2 var(--display);text-transform:uppercase;display:flex;align-items:center;gap:8px}
+.fact .t{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.kerb{height:6px;max-width:1440px;margin:0 auto;background:repeating-linear-gradient(90deg,var(--red) 0 28px,#f4f4f4 28px 56px);border-radius:2px}
+
+/* Main grid */
+.main{max-width:1440px;margin:18px auto 0;display:grid;grid-template-columns:320px minmax(0,1fr);gap:18px;align-items:start}
+@media (max-width:960px){.main{grid-template-columns:minmax(0,1fr)}.hero{grid-template-columns:minmax(0,1fr)}}
+
+/* Timing tower */
+.tower{background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;position:sticky;top:12px}
+@media (max-width:960px){.tower{position:static}}
+.more{display:none;background:none;border:1px solid var(--line);border-radius:999px;padding:3px 10px;color:var(--muted);font-size:11px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer}
+@media (max-width:960px){
+  .more{display:inline-block}
+  .tower:not(.open) .row:nth-child(n+4){display:none}
+  .rows{max-height:none}
+}
+@media (max-width:640px){
+  .facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+  .fact{min-width:0;padding:8px 10px}
+  .fact .v{font-size:16px}
+  .fact .v .mono{font-size:15px!important}
+  .fact .t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .hero{padding-block:12px}
+  .view{padding:12px}
+  .top{padding-block:10px}
+  .pickers{margin-left:0;width:100%}
+  .pickers .field{flex:1 1 0;min-width:0}
+  .pickers select{width:100%;max-width:none}
+}
+.tower-head{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--panel-2);border-bottom:1px solid var(--line)}
+.tower-head h2{margin:0;font:italic 800 18px/1 var(--display);text-transform:uppercase;letter-spacing:.04em}
+.tower-head span{font-size:11px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase}
+.rows{max-height:calc(100vh - 120px);overflow:auto}
+.row{display:grid;grid-template-columns:28px 4px 46px minmax(0,1fr) auto;align-items:center;gap:8px;padding:6px 12px 6px 8px;border-bottom:1px solid #1c1f26;font-size:14px}
+.row:nth-child(odd){background:#101217}
+.row .p{font:700 16px/1 var(--display);text-align:right;color:var(--muted)}
+.row:nth-child(-n+3) .p{color:var(--fg)}
+.row .bar{height:22px;border-radius:2px}
+.row .acr{font:800 17px/1 var(--display);letter-spacing:.04em}
+.row .team{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .gap{font-family:var(--mono);font-size:12px;text-align:right;white-space:nowrap}
+.row .gap small{display:block;color:var(--muted);font-size:10.5px}
+.purple{color:var(--purple)!important}.green{color:var(--green)!important}.yellow{color:var(--yellow)!important}
+.badge{display:inline-grid;place-items:center;min-width:34px;height:20px;padding:0 5px;border-radius:4px;font:800 11px/1 var(--display);letter-spacing:.06em;color:#0a0b0e}
+
+/* Panel + tabs */
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;min-width:0}
+.tabs{display:flex;gap:2px;overflow-x:auto;border-bottom:1px solid var(--line);padding:0 8px;scrollbar-width:thin}
+.tabs button{background:none;border:0;padding:13px 11px 11px;cursor:pointer;color:var(--muted);font:700 15px/1 var(--display);letter-spacing:.08em;text-transform:uppercase;border-bottom:3px solid transparent;white-space:nowrap}
+.tabs button:hover{color:var(--fg)}
+.tabs button[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--red)}
+.view{padding:18px;display:flex;flex-direction:column;gap:16px;min-width:0}
+.view h3{margin:0;font:italic 800 20px/1.1 var(--display);text-transform:uppercase;letter-spacing:.03em}
+.hint{color:var(--muted);font-size:13px;margin:0}
+.box{background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:12px 12px 8px;min-width:0}
+.box .lbl{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:6px;display:flex;justify-content:space-between;gap:8px}
+.cv{position:relative;height:240px}
+.cv.sm{height:120px}.cv.xs{height:90px}.cv.lg{height:300px}
+.empty{padding:40px 16px;text-align:center;color:var(--muted)}
+
+/* Compare bar */
+.cmp{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+@media (max-width:640px){.cmp{grid-template-columns:minmax(0,1fr)}}
+.car{background:var(--panel-2);border:1px solid var(--line);border-left:4px solid var(--c,#888);border-radius:8px;padding:10px 12px;display:flex;flex-wrap:wrap;gap:8px 10px;align-items:end;min-width:0}
+.car .tag{font:italic 800 14px/1 var(--display);color:var(--c);letter-spacing:.1em;width:100%}
+.car select{max-width:100%;flex:1 1 140px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.stat{background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.stat .k{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.stat .v{font:700 22px/1.2 var(--mono);font-variant-numeric:tabular-nums}
+.stat .v small{font-size:12px;color:var(--muted);font-weight:400}
+
+/* Chips */
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--panel-2);border-radius:999px;padding:4px 10px 4px 6px;cursor:pointer;font:700 13px/1 var(--display);letter-spacing:.05em;color:var(--muted)}
+.chip i{width:10px;height:10px;border-radius:50%;background:var(--c);opacity:.35}
+.chip[aria-pressed="true"]{color:var(--fg);border-color:var(--c)}
+.chip[aria-pressed="true"] i{opacity:1}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{background:var(--panel-2);border:0;padding:6px 12px;cursor:pointer;font:700 13px/1 var(--display);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--red);color:#fff}
+.toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.check{display:inline-flex;gap:6px;align-items:center;font-size:13px;color:var(--muted);cursor:pointer}
+
+/* Tables */
+.tbl-wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);text-align:left;padding:6px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:6px 10px;border-bottom:1px solid #1f232b;white-space:nowrap}
+td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.drv{display:flex;align-items:center;gap:8px;font:800 15px/1 var(--display);letter-spacing:.04em}
+.drv i{width:4px;height:18px;border-radius:2px;background:var(--c)}
+
+/* Strategy */
+.strat{display:flex;flex-direction:column;gap:5px}
+.srow{display:grid;grid-template-columns:52px minmax(0,1fr);gap:10px;align-items:center}
+.strack{position:relative;height:22px;background:#0e1014;border-radius:4px}
+.stint{position:absolute;top:2px;bottom:2px;border-radius:3px;display:flex;align-items:center;justify-content:center;font:700 11px/1 var(--display);color:#0a0b0e;overflow:hidden;white-space:nowrap;box-shadow:inset 0 -2px 0 rgba(0,0,0,.25)}
+.stint.used{background-image:repeating-linear-gradient(135deg,rgba(0,0,0,.18) 0 4px,transparent 4px 8px)}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--muted);align-items:center}
+.tyre{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;border:3px solid var(--c);font:800 10px/1 var(--display);color:var(--fg);background:#0a0b0e}
+.axis{display:flex;justify-content:space-between;font-family:var(--mono);font-size:11px;color:var(--muted);padding-left:62px}
+
+/* Map */
+.mapwrap{position:relative;background:radial-gradient(ellipse at 50% 40%,#161a22,#0d0f13 70%);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+#mapCanvas{display:block;width:100%}
+.maplegend{position:absolute;left:12px;bottom:10px;right:12px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;font-size:12px;color:var(--muted);pointer-events:none}
+.ramp{width:160px;height:8px;border-radius:4px}
+
+/* Race control */
+.rc{display:flex;flex-direction:column;gap:2px;max-height:620px;overflow:auto}
+.msg{display:grid;grid-template-columns:70px 44px 96px minmax(0,1fr);gap:10px;align-items:center;padding:7px 8px;border-bottom:1px solid #1f232b;font-size:13.5px}
+.msg .when{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.flag{font:800 11px/1 var(--display);letter-spacing:.08em;padding:4px 6px;border-radius:3px;text-align:center;background:#2a2e37;color:var(--fg)}
+.msg .text{min-width:0;overflow-wrap:anywhere}
+@media (max-width:640px){.msg{grid-template-columns:56px 40px minmax(0,1fr)}.msg .flag{display:none}}
+
+/* Schedule */
+.sched{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+.ev{background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:12px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:3px;color:var(--fg)}
+.ev:hover:not(:disabled){border-color:#454b58}
+.ev:disabled{cursor:default;opacity:.55}
+.ev.cur{border-color:var(--red);box-shadow:inset 0 0 0 1px var(--red)}
+.ev .r{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--red);font-weight:700;display:flex;justify-content:space-between}
+.ev .r span{color:var(--muted)}
+.ev .n{font:italic 800 19px/1.05 var(--display);text-transform:uppercase}
+.ev .c{font-size:12.5px;color:var(--muted)}
+
+footer{max-width:1440px;margin:22px auto 0;color:var(--muted);font-size:12px;display:flex;flex-wrap:wrap;gap:6px 18px;justify-content:space-between}
+.retry{background:var(--red);border:0;border-radius:4px;padding:3px 10px;color:#fff;cursor:pointer;font-weight:700}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand"><div class="brand-mark"><span>▶</span></div>Pit Wall</div>
+  <div class="busy" id="busy"><span class="dot"></span><span id="busyText">Ready</span></div>
+  <div class="pickers">
+    <div class="field"><label for="selYear">Season</label><select id="selYear"></select></div>
+    <div class="field"><label for="selMeeting">Grand Prix</label><select id="selMeeting"></select></div>
+    <div class="field"><label for="selSession">Session</label><select id="selSession"></select></div>
+  </div>
+</header>
+
+<section class="hero">
+  <div>
+    <div class="eyebrow" id="heroEyebrow">Loading season…</div>
+    <h1 id="heroTitle">Pit Wall</h1>
+    <div class="sub" id="heroSub">Formula 1 timing, telemetry and strategy</div>
+  </div>
+  <div class="facts" id="heroFacts"></div>
+</section>
+<div class="kerb"></div>
+
+<div class="main">
+  <aside class="tower">
+    <div class="tower-head"><h2>Classification</h2><span id="towerNote"></span><button class="more" id="towerMore" aria-expanded="false">Show all</button></div>
+    <div class="rows" id="tower"><div class="empty">Loading…</div></div>
+  </aside>
+
+  <section class="panel">
+    <nav class="tabs" id="tabs" role="tablist"></nav>
+
+    <div class="view" id="v-telemetry" hidden>
+      <div class="cmp" id="cmpBar">
+        <div class="car" id="carA"><div class="tag">Driver A</div>
+          <select id="drvA" aria-label="Driver A"></select><select id="lapA" aria-label="Driver A lap"></select></div>
+        <div class="car" id="carB"><div class="tag">Driver B</div>
+          <select id="drvB" aria-label="Driver B"></select><select id="lapB" aria-label="Driver B lap"></select></div>
+      </div>
+      <div class="stats" id="teleStats"></div>
+      <div class="box"><div class="lbl"><span>Speed · km/h</span><span id="spdNote"></span></div><div class="cv lg"><canvas id="cSpeed"></canvas></div></div>
+      <div class="box"><div class="lbl"><span id="deltaLbl">Gap to A · seconds</span></div><div class="cv sm"><canvas id="cDelta"></canvas></div></div>
+      <div class="box"><div class="lbl"><span>Throttle · %</span></div><div class="cv sm"><canvas id="cThr"></canvas></div></div>
+      <div class="box"><div class="lbl"><span>Brake</span></div><div class="cv xs"><canvas id="cBrk"></canvas></div></div>
+      <div class="box"><div class="lbl"><span>Gear</span></div><div class="cv sm"><canvas id="cGear"></canvas></div></div>
+      <div class="box"><div class="lbl"><span>Engine · RPM</span><span>DRS open shaded</span></div><div class="cv sm"><canvas id="cRpm"></canvas></div></div>
+    </div>
+
+    <div class="view" id="v-map" hidden>
+      <div class="toolbar">
+        <h3 id="mapTitle">Track map</h3>
+        <div class="seg" id="mapMode">
+          <button data-m="speed" aria-pressed="true">Speed</button>
+          <button data-m="gear" aria-pressed="false">Gear</button>
+          <button data-m="dom" aria-pressed="false">A vs B</button>
+        </div>
+      </div>
+      <p class="hint">Uses the two laps picked on the Telemetry tab. "A vs B" splits the lap into 25 mini-sectors and colours each by the faster driver.</p>
+      <div class="mapwrap"><canvas id="mapCanvas"></canvas><div class="maplegend" id="mapLegend"></div></div>
+    </div>
+
+    <div class="view" id="v-laps" hidden>
+      <div class="toolbar"><h3>Lap times</h3>
+        <label class="check"><input type="checkbox" id="hideSlow" checked> Hide pit and safety-car laps</label></div>
+      <div class="chips" id="lapChips"></div>
+      <div class="box"><div class="cv lg"><canvas id="cLaps"></canvas></div></div>
+      <h3>Sector analysis</h3>
+      <p class="hint">Each driver's fastest lap. <span class="purple">Purple</span> is the session's best sector, <span class="green">green</span> a personal best, <span class="yellow">yellow</span> slower. Ideal lap adds up a driver's best three sectors.</p>
+      <div class="tbl-wrap"><table id="sectorTbl"></table></div>
+    </div>
+
+    <div class="view" id="v-strategy" hidden>
+      <h3>Tyre strategy</h3>
+      <div class="legend" id="tyreLegend"></div>
+      <div class="strat" id="strat"></div>
+      <div class="axis" id="stratAxis"></div>
+    </div>
+
+    <div class="view" id="v-positions" hidden>
+      <h3>Position changes</h3>
+      <div class="box"><div class="cv" style="height:460px"><canvas id="cPos"></canvas></div></div>
+    </div>
+
+    <div class="view" id="v-weather" hidden>
+      <h3>Weather</h3>
+      <div class="stats" id="wxStats"></div>
+      <div class="box"><div class="lbl"><span>Temperature · °C</span></div><div class="cv"><canvas id="cWx"></canvas></div></div>
+      <div class="box"><div class="lbl"><span>Wind · m/s &nbsp; Humidity · %</span></div><div class="cv sm"><canvas id="cWind"></canvas></div></div>
+    </div>
+
+    <div class="view" id="v-control" hidden>
+      <h3>Race control</h3>
+      <div class="rc" id="rc"></div>
+    </div>
+
+    <div class="view" id="v-schedule" hidden>
+      <h3 id="schedTitle">Calendar</h3>
+      <div class="sched" id="sched"></div>
+    </div>
+  </section>
+</div>
+
+<footer>
+  <span>Live data from the free OpenF1 API, 2023 season onwards.</span>
+  <span>Unofficial fan tool. Not affiliated with Formula 1 or any team.</span>
+</footer>
+
+<script>
+'use strict';
+const API = 'https://api.openf1.org/v1/';
+const $ = id => document.getElementById(id);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* ---------- API with rate-limit queue + retry ---------- */
+const cache = new Map();
+let nextSlot = 0, pending = 0, lastErr = null;
+function busy(text){
+  const b = $('busy');
+  b.className = 'busy' + (pending > 0 ? ' on' : '') + (lastErr ? ' err' : '');
+  $('busyText').innerHTML = lastErr ? esc(lastErr) + ' <button class="retry" id="retryBtn">Retry</button>' : (text || (pending > 0 ? 'Loading data…' : 'Ready'));
+  const rb = $('retryBtn'); if (rb) rb.onclick = () => { lastErr = null; busy(); reloadCurrent(); };
+}
+async function api(path, label){
+  if (cache.has(path)) return cache.get(path);
+  pending++; busy('Loading ' + (label || path.split('?')[0]) + '…');
+  try {
+    for (let attempt = 0; attempt < 6; attempt++){
+      const now = Date.now(), slot = Math.max(now, nextSlot);
+      nextSlot = slot + 400;                       // OpenF1 free tier: ~3 requests / second
+      if (slot > now) await sleep(slot - now);
+      let r;
+      try { r = await fetch(API + path); } catch (e) { await sleep(900 * (attempt + 1)); continue; }
+      if (r.status === 429 || r.status >= 500){ await sleep(1500 * (attempt + 1)); continue; }
+      if (r.status === 404){ cache.set(path, []); return []; }   // OpenF1 answers 404 for "no results"
+      if (!r.ok) throw new Error('OpenF1 answered ' + r.status);
+      const j = await r.json();
+      const out = Array.isArray(j) ? j : [];
+      cache.set(path, out);
+      return out;
+    }
+    throw new Error('OpenF1 is busy right now.');
+  } finally { pending--; busy(); }
+}
+function fail(e){ console.error(e); lastErr = (e && e.message) || 'Something went wrong.'; busy(); }
+
+/* ---------- helpers ---------- */
+function fmtLap(s){
+  if (s == null || isNaN(s)) return '—';
+  s = +s; const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
+  if (h) return `${h}:${String(m).padStart(2,'0')}:${r.toFixed(3).padStart(6,'0')}`;
+  return m ? `${m}:${r.toFixed(3).padStart(6,'0')}` : r.toFixed(3);
+}
+const lastVal = v => Array.isArray(v) ? [...v].reverse().find(x => x != null) : v;
+const TEAM_CODES = [[/red bull/i,'RBR'],[/ferrari/i,'FER'],[/mercedes/i,'MER'],[/mclaren/i,'MCL'],[/aston/i,'AMR'],[/alpine/i,'ALP'],
+  [/williams/i,'WIL'],[/racing bulls|^rb\b|alphatauri|visa/i,'RB'],[/audi/i,'AUD'],[/sauber|kick|alfa/i,'SAU'],[/haas/i,'HAA'],[/cadillac/i,'CAD']];
+function teamCode(name){ if (!name) return '—'; for (const [re, c] of TEAM_CODES) if (re.test(name)) return c; return name.slice(0,3).toUpperCase(); }
+function hexOk(h){ return /^[0-9a-f]{6}$/i.test(h || '') ? '#' + h : '#8a919c'; }
+function lighten(hex, amt){
+  const n = parseInt(hex.slice(1), 16); let r = n >> 16, g = (n >> 8) & 255, b = n & 255;
+  r = Math.round(r + (255 - r) * amt); g = Math.round(g + (255 - g) * amt); b = Math.round(b + (255 - b) * amt);
+  return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+}
+function badge(d){ return `<span class="badge" style="background:${d.color}">${esc(d.code)}</span>`; }
+const TYRES = {SOFT:['#ff2d2d','S'],MEDIUM:['#ffd12e','M'],HARD:['#f2f2f2','H'],INTERMEDIATE:['#3cc35a','I'],WET:['#2f7cf6','W']};
+const tyre = c => TYRES[(c||'').toUpperCase()] || ['#7a808b','?'];
+
+/* ---------- state ---------- */
+const S = { year:null, meetings:[], meeting:null, sessions:[], session:null, token:0,
+  drivers:new Map(), order:[], results:[], laps:[], lapsBy:{}, best:{}, tab:'telemetry', lapSel:null, mapMode:'speed', cmp:null };
+const charts = {};
+function chart(id, cfg){ if (charts[id]) charts[id].destroy(); charts[id] = new Chart($(id), cfg); return charts[id]; }
+function killCharts(){ for (const k in charts){ charts[k].destroy(); delete charts[k]; } }
+
+if (window.Chart){
+  Chart.defaults.color = '#8a919c';
+  Chart.defaults.font.family = "'Titillium Web','Segoe UI',system-ui,sans-serif";
+  Chart.defaults.borderColor = 'rgba(255,255,255,.06)';
+  Chart.defaults.plugins.legend.labels.boxWidth = 10;
+  Chart.defaults.plugins.tooltip.backgroundColor = '#0a0b0e';
+  Chart.defaults.plugins.tooltip.borderColor = '#252932';
+  Chart.defaults.plugins.tooltip.borderWidth = 1;
+}
+
+/* ---------- tabs ---------- */
+const TABS = [['telemetry','Telemetry'],['map','Track map'],['laps','Lap times'],['strategy','Tyre strategy'],['positions','Positions'],['weather','Weather'],['control','Race control'],['schedule','Calendar']];
+TABS.forEach(([k, t]) => {
+  const b = document.createElement('button'); b.textContent = t; b.role = 'tab'; b.dataset.k = k;
+  b.onclick = () => showTab(k); $('tabs').appendChild(b);
+});
+function showTab(k){
+  S.tab = k;
+  document.querySelectorAll('#tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.k === k));
+  TABS.forEach(([x]) => $('v-' + x).hidden = x !== k);
+  renderTab().catch(fail);
+}
+async function renderTab(){
+  if (!S.session && S.tab !== 'schedule') return;
+  switch (S.tab){
+    case 'telemetry': return loadCompare();
+    case 'map': return renderMap();
+    case 'laps': return renderLaps();
+    case 'strategy': return renderStrategy();
+    case 'positions': return renderPositions();
+    case 'weather': return renderWeather();
+    case 'control': return renderControl();
+    case 'schedule': return renderSchedule();
+  }
+}
+function reloadCurrent(){ if (S.session) loadSession(S.session.session_key).catch(fail); else init().catch(fail); }
+
+/* ---------- season / meeting / session ---------- */
+async function init(){
+  const now = new Date().getFullYear(), years = [];
+  for (let y = now; y >= 2023; y--) years.push(y);
+  $('selYear').innerHTML = years.map(y => `<option>${y}</option>`).join('');
+  $('selYear').onchange = () => loadYear(+$('selYear').value).catch(fail);
+  $('selMeeting').onchange = () => loadMeeting(+$('selMeeting').value).catch(fail);
+  $('selSession').onchange = () => loadSession(+$('selSession').value).catch(fail);
+  showTab('telemetry');
+  await loadYear(now);
+}
+async function loadYear(y, pickKey){
+  S.year = y; $('selYear').value = y;
+  const ms = (await api('meetings?year=' + y, 'calendar')).slice().sort((a, b) => new Date(a.date_start) - new Date(b.date_start));
+  let round = 0;
+  ms.forEach(m => { m._round = /test/i.test(m.meeting_name) ? null : ++round; });
+  S.meetings = ms;
+  const started = ms.filter(m => new Date(m.date_start) < Date.now());
+  if (!started.length){
+    if (y > 2023) return loadYear(y - 1);
+    throw new Error('No events found.');
+  }
+  $('selMeeting').innerHTML = started.slice().reverse().map(m => `<option value="${m.meeting_key}">${m._round ? 'R' + m._round + ' · ' : ''}${esc(m.meeting_name)}</option>`).join('');
+  $('schedTitle').textContent = y + ' calendar';
+  if (S.tab === 'schedule') renderSchedule();
+  await loadMeeting(pickKey || started[started.length - 1].meeting_key);
+}
+async function loadMeeting(key){
+  S.meeting = S.meetings.find(m => m.meeting_key == key);
+  $('selMeeting').value = key;
+  const ss = (await api('sessions?meeting_key=' + key, 'sessions')).filter(s => new Date(s.date_start) < Date.now())
+    .sort((a, b) => new Date(a.date_start) - new Date(b.date_start));
+  S.sessions = ss;
+  if (!ss.length){ $('selSession').innerHTML = '<option>No sessions yet</option>'; return; }
+  $('selSession').innerHTML = ss.map(s => `<option value="${s.session_key}">${esc(s.session_name)}</option>`).join('');
+  const race = [...ss].reverse().find(s => s.session_name === 'Race') || ss[ss.length - 1];
+  await loadSession(race.session_key);
+}
+async function loadSession(key){
+  const token = ++S.token;
+  S.session = S.sessions.find(s => s.session_key == key) || { session_key:key, session_name:'' };
+  $('selSession').value = key;
+  S.cmp = null; S.lapSel = null; killCharts();
+  $('tower').innerHTML = '<div class="empty">Loading timing…</div>';
+  const [drv, res, laps] = await Promise.all([
+    api('drivers?session_key=' + key, 'drivers'),
+    api('session_result?session_key=' + key, 'results'),
+    api('laps?session_key=' + key, 'lap times')
+  ]);
+  if (token !== S.token) return;
+
+  S.drivers = new Map();
+  drv.forEach(d => {
+    if (S.drivers.has(d.driver_number)) return;
+    S.drivers.set(d.driver_number, { n:d.driver_number, acr:d.name_acronym || String(d.driver_number), name:d.full_name || d.broadcast_name || '',
+      team:d.team_name || '', code:teamCode(d.team_name), color:hexOk(d.team_colour) });
+  });
+  S.laps = laps.filter(l => l.lap_number != null);
+  S.lapsBy = {}; S.best = {};
+  S.laps.forEach(l => {
+    if (!S.drivers.has(l.driver_number)) S.drivers.set(l.driver_number, { n:l.driver_number, acr:String(l.driver_number), name:'', team:'', code:'—', color:'#8a919c' });
+    (S.lapsBy[l.driver_number] ||= []).push(l);
+  });
+  for (const n in S.lapsBy){
+    S.lapsBy[n].sort((a, b) => a.lap_number - b.lap_number);
+    const timed = S.lapsBy[n].filter(l => l.lap_duration);
+    S.best[n] = timed.reduce((a, b) => !a || b.lap_duration < a.lap_duration ? b : a, null);
+  }
+  S.results = res.slice().sort((a, b) => (a.position ?? 99) - (b.position ?? 99));
+  S.order = S.results.length ? S.results.map(r => r.driver_number) :
+    [...S.drivers.keys()].sort((a, b) => (S.best[a]?.lap_duration ?? 1e9) - (S.best[b]?.lap_duration ?? 1e9));
+  S.drivers.forEach((_, n) => { if (!S.order.includes(n)) S.order.push(n); });
+
+  renderHero(); renderTower(); setupPickers();
+  await renderTab();
+}
+
+/* ---------- hero + tower ---------- */
+function d(n){ return S.drivers.get(+n) || { n, acr:String(n), name:'', team:'', code:'—', color:'#8a919c' }; }
+function isRace(){ return /race|sprint$/i.test(S.session?.session_name || '') && !/qualifying|shootout/i.test(S.session?.session_name || ''); }
+function renderHero(){
+  const m = S.meeting || {}, s = S.session || {};
+  const dt = new Date(s.date_start || m.date_start);
+  $('heroEyebrow').textContent = [m._round ? 'Round ' + m._round : 'Pre-season', m.country_name, S.year].filter(Boolean).join(' · ');
+  $('heroTitle').textContent = m.meeting_name || 'Formula 1';
+  $('heroSub').innerHTML = `<b>${esc(s.session_name)}</b> · ${esc(m.circuit_short_name || '')}${m.location ? ', ' + esc(m.location) : ''} · ${dt.toLocaleDateString(undefined, {weekday:'short', day:'numeric', month:'long', year:'numeric'})}`;
+  const facts = [];
+  const p1 = S.results[0];
+  if (p1){ const x = d(p1.driver_number); facts.push(`<div class="fact"><div class="k">${isRace() ? 'Winner' : 'P1'}</div><div class="v">${badge(x)}${esc(x.acr)}</div><div class="t">${esc(x.name)}</div></div>`); }
+  let fl = null; for (const n in S.best){ const b = S.best[n]; if (b && (!fl || b.lap_duration < fl.lap_duration)) fl = b; }
+  if (fl){ const x = d(fl.driver_number); facts.push(`<div class="fact"><div class="k">Fastest lap</div><div class="v"><span class="purple mono" style="font-size:18px">${fmtLap(fl.lap_duration)}</span></div><div class="t">${esc(x.acr)} · lap ${fl.lap_number}</div></div>`); }
+  const total = Math.max(0, ...S.laps.map(l => l.lap_number));
+  if (total) facts.push(`<div class="fact"><div class="k">Laps</div><div class="v mono" style="font-size:18px">${total}</div><div class="t">${S.drivers.size} drivers</div></div>`);
+  $('heroFacts').innerHTML = facts.join('');
+}
+function renderTower(){
+  const fastest = Math.min(...Object.values(S.best).filter(Boolean).map(b => b.lap_duration));
+  $('towerNote').textContent = S.session?.session_name || '';
+  if (!S.order.length){ $('tower').innerHTML = '<div class="empty">No timing for this session yet.</div>'; return; }
+  const resBy = new Map(S.results.map(r => [r.driver_number, r]));
+  const leaderBest = S.best[S.order[0]]?.lap_duration;
+  $('tower').innerHTML = S.order.map((n, i) => {
+    const x = d(n), r = resBy.get(n), b = S.best[n];
+    let main = '', sub = b ? fmtLap(b.lap_duration) : '';
+    if (r){
+      if (r.dnf) main = 'DNF'; else if (r.dns) main = 'DNS'; else if (r.dsq) main = 'DSQ';
+      else if (r.position === 1){ const t = lastVal(r.duration); main = isRace() ? fmtLap(t) : fmtLap(t ?? b?.lap_duration); }
+      else { const g = lastVal(r.gap_to_leader); main = g == null ? '' : (typeof g === 'number' ? '+' + g.toFixed(3) : esc(String(g)).replace(/^\+?/, '+')); }
+    } else if (b){ main = i === 0 ? fmtLap(b.lap_duration) : '+' + (b.lap_duration - leaderBest).toFixed(3); sub = ''; }
+    const isFl = b && Math.abs(b.lap_duration - fastest) < 1e-6;
+    return `<div class="row"><div class="p">${r?.position ?? (r ? '–' : i + 1)}</div><div class="bar" style="background:${x.color}"></div>
+      <div class="acr">${esc(x.acr)}</div><div class="team">${esc(x.team)}</div>
+      <div class="gap">${main}${sub ? `<small class="${isFl ? 'purple' : ''}">${isFl ? '◆ ' : ''}${sub}</small>` : ''}</div></div>`;
+  }).join('');
+}
+
+/* ---------- lap pickers (shared by telemetry + map) ---------- */
+function timedLaps(n){ return (S.lapsBy[n] || []).filter(l => l.lap_duration && l.date_start); }
+function fillLapSelect(sel, n){
+  const laps = timedLaps(n), b = S.best[n];
+  if (!laps.length){ sel.innerHTML = '<option value="">No timed laps</option>'; sel.disabled = true; return; }
+  sel.disabled = false;
+  sel.innerHTML = laps.map(l => `<option value="${l.lap_number}">Lap ${l.lap_number} · ${fmtLap(l.lap_duration)}${b && l.lap_number === b.lap_number ? '  ★ fastest' : ''}</option>`).join('');
+  sel.value = b ? b.lap_number : laps[0].lap_number;
+}
+function setupPickers(){
+  const withLaps = S.order.filter(n => timedLaps(n).length);
+  const opts = S.order.map(n => { const x = d(n); return `<option value="${n}">${esc(x.acr)} · ${esc(x.name || x.team)}</option>`; }).join('');
+  $('drvA').innerHTML = opts; $('drvB').innerHTML = opts;
+  const byPace = withLaps.slice().sort((a, b) => S.best[a].lap_duration - S.best[b].lap_duration);
+  $('drvA').value = byPace[0] ?? S.order[0];
+  $('drvB').value = byPace[1] ?? S.order[1] ?? S.order[0];
+  fillLapSelect($('lapA'), +$('drvA').value); fillLapSelect($('lapB'), +$('drvB').value);
+  paintCars();
+}
+function paintCars(){
+  const a = d($('drvA').value), b = d($('drvB').value);
+  $('carA').style.setProperty('--c', a.color);
+  $('carB').style.setProperty('--c', colorB(a, b));
+}
+function colorB(a, b){ return a.color === b.color ? lighten(b.color, .55) : b.color; }
+let cmpTimer = null;
+function queueCompare(){ paintCars(); S.cmp = null; clearTimeout(cmpTimer); cmpTimer = setTimeout(() => (S.tab === 'map' ? renderMap() : loadCompare()).catch(fail), 250); }
+$('drvA').onchange = () => { fillLapSelect($('lapA'), +$('drvA').value); queueCompare(); };
+$('drvB').onchange = () => { fillLapSelect($('lapB'), +$('drvB').value); queueCompare(); };
+$('lapA').onchange = queueCompare; $('lapB').onchange = queueCompare;
+
+/* ---------- telemetry ---------- */
+function lapObj(n, lapNo){ return timedLaps(n).find(l => l.lap_number == lapNo); }
+function windowQuery(n, lap){
+  const st = new Date(lap.date_start), en = new Date(st.getTime() + lap.lap_duration * 1000 + 200);
+  return `session_key=${S.session.session_key}&driver_number=${n}&date>=${st.toISOString()}&date<=${en.toISOString()}`;
+}
+function prepTele(raw, lap){
+  const t0 = new Date(lap.date_start).getTime();
+  const pts = raw.map(p => ({ t:(new Date(p.date).getTime() - t0) / 1000, v:p.speed ?? 0, thr:p.throttle ?? 0, brk:p.brake ?? 0, g:p.n_gear ?? 0, rpm:p.rpm ?? 0, drs:p.drs ?? 0 }))
+    .filter(p => p.t >= -0.05 && p.t <= lap.lap_duration + 0.3).sort((a, b) => a.t - b.t);
+  let dist = 0;
+  pts.forEach((p, i) => { if (i){ const q = pts[i-1]; dist += ((p.v + q.v) / 2 / 3.6) * (p.t - q.t); } p.d = dist; });
+  return { pts, len:dist, lap };
+}
+function interp(xs, ys, x){
+  let lo = 0, hi = xs.length - 1;
+  if (hi < 0) return NaN; if (x <= xs[0]) return ys[0]; if (x >= xs[hi]) return ys[hi];
+  while (hi - lo > 1){ const m = (lo + hi) >> 1; if (xs[m] <= x) lo = m; else hi = m; }
+  const f = (x - xs[lo]) / ((xs[hi] - xs[lo]) || 1); return ys[lo] + (ys[hi] - ys[lo]) * f;
+}
+async function getCompare(){
+  const nA = +$('drvA').value, nB = +$('drvB').value, lA = lapObj(nA, $('lapA').value), lB = lapObj(nB, $('lapB').value);
+  if (!lA || !lB) return null;
+  const key = `${nA}/${lA.lap_number}/${nB}/${lB.lap_number}`;
+  if (S.cmp && S.cmp.key === key) return S.cmp;
+  const token = S.token;
+  const [rA, rB] = await Promise.all([api('car_data?' + windowQuery(nA, lA), 'telemetry ' + d(nA).acr), api('car_data?' + windowQuery(nB, lB), 'telemetry ' + d(nB).acr)]);
+  if (token !== S.token) return null;
+  const A = prepTele(rA, lA), B = prepTele(rB, lB);
+  const L = (A.len + B.len) / 2 || 1;
+  A.pts.forEach(p => p.d *= L / (A.len || 1)); B.pts.forEach(p => p.d *= L / (B.len || 1));
+  A.dA = A.pts.map(p => p.d); A.tA = A.pts.map(p => p.t); B.dA = B.pts.map(p => p.d); B.tA = B.pts.map(p => p.t);
+  S.cmp = { key, nA, nB, A, B, L };
+  return S.cmp;
+}
+async function loadCompare(){
+  const ids = ['cSpeed','cDelta','cThr','cBrk','cGear','cRpm'];
+  const c = await getCompare();
+  if (!c){ $('teleStats').innerHTML = '<div class="empty" style="grid-column:1/-1">Pick two drivers with timed laps to compare.</div>'; ids.forEach(i => { if (charts[i]){ charts[i].destroy(); delete charts[i]; } }); return; }
+  if (S.tab !== 'telemetry') return;
+  const a = d(c.nA), b = d(c.nB), ca = a.color, cb = colorB(a, b);
+  if (!c.A.pts.length || !c.B.pts.length){
+    $('teleStats').innerHTML = '<div class="empty" style="grid-column:1/-1">OpenF1 has no car telemetry for one of these laps. Try another lap or session.</div>'; return;
+  }
+  const gap = c.B.lap.lap_duration - c.A.lap.lap_duration;
+  const topA = Math.round(Math.max(...c.A.pts.map(p => p.v))), topB = Math.round(Math.max(...c.B.pts.map(p => p.v)));
+  const fullA = c.A.pts.filter(p => p.thr >= 98).length / c.A.pts.length * 100, fullB = c.B.pts.filter(p => p.thr >= 98).length / c.B.pts.length * 100;
+  $('teleStats').innerHTML = [
+    [`${a.acr} lap ${c.A.lap.lap_number}`, fmtLap(c.A.lap.lap_duration), ca],
+    [`${b.acr} lap ${c.B.lap.lap_number}`, fmtLap(c.B.lap.lap_duration), cb],
+    ['Gap', (gap >= 0 ? '+' : '') + gap.toFixed(3) + '<small> s</small>', gap > 0 ? 'var(--green)' : 'var(--red)'],
+    ['Top speed', `${topA}<small> / ${topB} km/h</small>`, ''],
+    ['Full throttle', `${fullA.toFixed(0)}<small> / ${fullB.toFixed(0)} %</small>`, '']
+  ].map(([k, v, col]) => `<div class="stat"><div class="k">${esc(k)}</div><div class="v" style="${col ? 'color:' + col : ''}">${v}</div></div>`).join('');
+  $('spdNote').innerHTML = `<span style="color:${ca}">■ ${esc(a.acr)}</span> &nbsp; <span style="color:${cb}">■ ${esc(b.acr)}</span>`;
+
+  const series = (key, scale = 1) => [
+    { label:a.acr, data:c.A.pts.map(p => ({ x:p.d, y:p[key] * scale })), color:ca },
+    { label:b.acr, data:c.B.pts.map(p => ({ x:p.d, y:p[key] * scale })), color:cb }
+  ];
+  const line = (id, sets, extra = {}) => chart(id, {
+    type:'line',
+    data:{ datasets:sets.map(s => ({ label:s.label, data:s.data, borderColor:s.color, backgroundColor:s.bg || s.color, borderWidth:s.w || 1.7, pointRadius:0, fill:s.fill || false, stepped:extra.stepped || false, tension:0 })) },
+    options:{ animation:false, parsing:false, normalized:true, maintainAspectRatio:false,
+      interaction:{ mode:'nearest', axis:'x', intersect:false },
+      plugins:{ legend:{ display:false }, tooltip:{ callbacks:{ title:i => i.length ? Math.round(i[0].parsed.x) + ' m' : '' } }, ...(extra.plugins || {}) },
+      scales:{ x:{ type:'linear', min:0, max:c.L, ticks:{ callback:v => (v / 1000).toFixed(1) + ' km', maxTicksLimit:10 } }, y:{ ...(extra.y || {}) } } }
+  });
+  line('cSpeed', series('v'), { y:{ suggestedMin:60 } });
+  // delta: time of B at each distance minus time of A
+  const grid = []; for (let x = 0; x <= c.L; x += 5) grid.push(x);
+  const delta = grid.map(x => ({ x, y:interp(c.B.dA, c.B.tA, x) - interp(c.A.dA, c.A.tA, x) }));
+  $('deltaLbl').innerHTML = `Gap · seconds &nbsp;<span style="color:var(--muted);text-transform:none;letter-spacing:0">above zero = ${esc(b.acr)} behind ${esc(a.acr)}</span>`;
+  line('cDelta', [{ label:'Gap', data:delta, color:cb, fill:{ target:'origin', above:'rgba(255,255,255,.06)', below:'rgba(255,255,255,.06)' } }],
+    { y:{ grid:{ color:ctx => ctx.tick.value === 0 ? 'rgba(255,255,255,.35)' : 'rgba(255,255,255,.06)' } } });
+  line('cThr', series('thr'), { y:{ min:0, max:100 } });
+  line('cBrk', series('brk', 1 / 100), { stepped:true, y:{ min:0, max:1, ticks:{ stepSize:1, callback:v => v ? 'On' : 'Off' } } });
+  line('cGear', series('g'), { stepped:true, y:{ min:1, max:8, ticks:{ stepSize:1 } } });
+  // DRS: OpenF1 values 10, 12, 14 mean flap open
+  const drsSets = [[c.A, ca], [c.B, cb]].map(([X, col], i) => ({ label:'DRS', data:X.pts.map(p => ({ x:p.d, y:p.drs >= 10 ? 14000 - i * 600 : null })), color:col + '00', bg:col + '33', fill:'start', w:0 }));
+  line('cRpm', [...series('rpm'), ...drsSets], { y:{ suggestedMin:6000 } });
+}
+
+/* ---------- track map ---------- */
+document.querySelectorAll('#mapMode button').forEach(b => b.onclick = () => {
+  S.mapMode = b.dataset.m;
+  document.querySelectorAll('#mapMode button').forEach(x => x.setAttribute('aria-pressed', x === b));
+  renderMap().catch(fail);
+});
+let mapResizeTimer; window.addEventListener('resize', () => { clearTimeout(mapResizeTimer); mapResizeTimer = setTimeout(() => { if (S.tab === 'map') renderMap().catch(fail); }, 200); });
+const GEAR_COLS = ['#3b2fc9','#2f6bff','#19b6e6','#1fd1a0','#7ddc3a','#f2d32b','#ff8a1f','#ff2d55'];
+function speedCol(v, lo, hi){
+  const f = Math.max(0, Math.min(1, (v - lo) / ((hi - lo) || 1)));
+  return `hsl(${255 - f * 255},95%,${48 + f * 6}%)`;
+}
+async function renderMap(){
+  const c = await getCompare();
+  const cv = $('mapCanvas'), wrap = cv.parentElement;
+  const W = wrap.clientWidth || 600, H = Math.min(640, Math.max(320, W * 0.66)), dpr = window.devicePixelRatio || 1;
+  cv.width = W * dpr; cv.height = H * dpr; cv.style.height = H + 'px';
+  const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
+  const legend = $('mapLegend');
+  if (!c){ legend.innerHTML = 'Pick two drivers with timed laps on the Telemetry tab.'; return; }
+  const a = d(c.nA), b = d(c.nB);
+  $('mapTitle').textContent = S.mapMode === 'dom' ? `${a.acr} vs ${b.acr}` : `${a.acr} · lap ${c.A.lap.lap_number}`;
+  const token = S.token;
+  const loc = (await api('location?' + windowQuery(c.nA, c.A.lap), 'track position ' + a.acr)).filter(p => p.x || p.y);
+  if (token !== S.token || S.tab !== 'map') return;
+  if (loc.length < 10){ legend.innerHTML = 'OpenF1 has no position data for this lap.'; return; }
+  const t0 = new Date(c.A.lap.date_start).getTime();
+  const P = loc.map(p => ({ x:p.x, y:p.y, t:(new Date(p.date).getTime() - t0) / 1000 })).sort((p, q) => p.t - q.t);
+  const tA = c.A.tA, sp = c.A.pts.map(p => p.v), gr = c.A.pts.map(p => p.g);
+  P.forEach(p => { p.d = interp(tA, c.A.dA, p.t); p.v = interp(tA, sp, p.t); p.g = gr[Math.max(0, Math.min(gr.length - 1, Math.round(interp(tA, tA.map((_, i) => i), p.t))))]; });
+  const xs = P.map(p => p.x), ys = P.map(p => p.y);
+  const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+  const pad = 40, padB = 54, s = Math.min((W - pad * 2) / ((maxX - minX) || 1), (H - pad - padB) / ((maxY - minY) || 1));
+  const ox = (W - (maxX - minX) * s) / 2, oy = pad + ((H - pad - padB) - (maxY - minY) * s) / 2;
+  const X = p => ox + (p.x - minX) * s, Y = p => oy + (maxY - p.y) * s;
+
+  g.lineCap = 'round'; g.lineJoin = 'round';
+  const path = () => { g.beginPath(); P.forEach((p, i) => i ? g.lineTo(X(p), Y(p)) : g.moveTo(X(p), Y(p))); };
+  path(); g.strokeStyle = 'rgba(0,0,0,.6)'; g.lineWidth = 16; g.stroke();
+  path(); g.strokeStyle = '#2a2f3a'; g.lineWidth = 11; g.stroke();
+
+  let colorAt, legendHtml;
+  if (S.mapMode === 'speed'){
+    const lo = Math.min(...sp), hi = Math.max(...sp);
+    colorAt = p => speedCol(p.v, lo, hi);
+    const stops = [0, .25, .5, .75, 1].map(f => speedCol(lo + f * (hi - lo), lo, hi)).join(',');
+    legendHtml = `<span class="mono">${Math.round(lo)}</span><span class="ramp" style="background:linear-gradient(90deg,${stops})"></span><span class="mono">${Math.round(hi)} km/h</span>`;
+  } else if (S.mapMode === 'gear'){
+    colorAt = p => GEAR_COLS[Math.max(0, Math.min(7, (p.g || 1) - 1))];
+    legendHtml = GEAR_COLS.map((col, i) => `<span style="display:inline-flex;gap:4px;align-items:center"><i style="width:10px;height:10px;border-radius:2px;background:${col}"></i>${i + 1}</span>`).join('');
+  } else {
+    const N = 25, seg = c.L / N, ca = a.color, cb = colorB(a, b), win = [];
+    let wa = 0, wb = 0;
+    for (let k = 0; k < N; k++){
+      const d0 = k * seg, d1 = d0 + seg;
+      const ta = interp(c.A.dA, c.A.tA, d1) - interp(c.A.dA, c.A.tA, d0), tb = interp(c.B.dA, c.B.tA, d1) - interp(c.B.dA, c.B.tA, d0);
+      win.push(ta <= tb ? ca : cb); ta <= tb ? wa++ : wb++;
+    }
+    colorAt = p => win[Math.max(0, Math.min(N - 1, Math.floor(p.d / seg)))];
+    legendHtml = `<span style="color:${ca};font-weight:700">■ ${esc(a.acr)} faster in ${wa}</span><span style="color:${cb};font-weight:700">■ ${esc(b.acr)} faster in ${wb}</span><span>of 25 mini-sectors</span>`;
+  }
+  g.lineWidth = 6;
+  for (let i = 1; i < P.length; i++){
+    g.beginPath(); g.moveTo(X(P[i-1]), Y(P[i-1])); g.lineTo(X(P[i]), Y(P[i]));
+    g.strokeStyle = colorAt(P[i]); g.shadowColor = g.strokeStyle; g.shadowBlur = 8; g.stroke();
+  }
+  g.shadowBlur = 0;
+  // start / finish marker: little chequered block
+  const sx = X(P[0]), sy = Y(P[0]);
+  for (let i = 0; i < 4; i++) for (let j = 0; j < 2; j++){ g.fillStyle = (i + j) % 2 ? '#0a0b0e' : '#ffffff'; g.fillRect(sx - 8 + i * 4, sy - 4 + j * 4, 4, 4); }
+  g.fillStyle = '#eef0f3'; g.font = "700 12px 'Titillium Web',sans-serif"; const right = sx < W - 70; g.textAlign = right ? 'left' : 'right'; g.fillText('START', right ? sx + 12 : sx - 12, sy + 4); g.textAlign = 'left';
+  legend.innerHTML = legendHtml;
+}
+
+/* ---------- lap times ---------- */
+let lapPicked = null;
+$('hideSlow').onchange = () => renderLaps();
+function renderLaps(){
+  const withLaps = S.order.filter(n => timedLaps(n).length);
+  if (!lapPicked || lapPicked.session !== S.session.session_key) lapPicked = { session:S.session.session_key, set:new Set(withLaps.slice(0, 5)) };
+  $('lapChips').innerHTML = withLaps.map(n => { const x = d(n); return `<button class="chip" data-n="${n}" aria-pressed="${lapPicked.set.has(n)}" style="--c:${x.color}"><i></i>${esc(x.acr)}</button>`; }).join('');
+  $('lapChips').querySelectorAll('.chip').forEach(ch => ch.onclick = () => { const n = +ch.dataset.n; lapPicked.set.has(n) ? lapPicked.set.delete(n) : lapPicked.set.add(n); renderLaps(); });
+  const hide = $('hideSlow').checked, seen = new Map();
+  const sets = [...lapPicked.set].map(n => {
+    const x = d(n); let col = x.color; if (seen.has(col)) col = lighten(col, .5); seen.set(x.color, 1);
+    let laps = timedLaps(n).filter(l => !l.is_pit_out_lap);
+    if (hide && laps.length > 3){ const sorted = laps.map(l => l.lap_duration).sort((a, b) => a - b), med = sorted[Math.floor(sorted.length / 2)]; laps = laps.filter(l => l.lap_duration < med * 1.07); }
+    return { label:x.acr, data:laps.map(l => ({ x:l.lap_number, y:l.lap_duration })), borderColor:col, backgroundColor:col, pointRadius:2.5, pointHoverRadius:5, borderWidth:1.6, showLine:true, tension:.2 };
+  });
+  chart('cLaps', { type:'scatter', data:{ datasets:sets }, options:{ animation:false, maintainAspectRatio:false,
+    plugins:{ legend:{ position:'bottom' }, tooltip:{ callbacks:{ label:i => `${i.dataset.label}  lap ${i.parsed.x}  ${fmtLap(i.parsed.y)}` } } },
+    scales:{ x:{ title:{ display:true, text:'Lap' }, ticks:{ stepSize:5 } }, y:{ ticks:{ callback:v => fmtLap(v) } } } } });
+
+  // sector analysis
+  const rows = withLaps.map(n => {
+    const laps = timedLaps(n), b = S.best[n];
+    const pb = [1, 2, 3].map(k => Math.min(...laps.map(l => l['duration_sector_' + k]).filter(v => v)));
+    return { n, b, pb, ideal:pb.every(isFinite) ? pb[0] + pb[1] + pb[2] : null };
+  }).sort((p, q) => p.b.lap_duration - q.b.lap_duration);
+  const sb = [1, 2, 3].map(k => Math.min(...rows.map(r => r.pb[k - 1]).filter(isFinite)));
+  const top = rows[0]?.b.lap_duration;
+  const cell = (v, pb, best) => { if (!v) return '<td class="num">—</td>'; const cls = Math.abs(v - best) < 1e-6 ? 'purple' : Math.abs(v - pb) < 1e-6 ? 'green' : 'yellow'; return `<td class="num ${cls}">${v.toFixed(3)}</td>`; };
+  $('sectorTbl').innerHTML = '<tr><th>Pos</th><th>Driver</th><th>Team</th><th class="num">Lap</th><th class="num">Best lap</th><th class="num">Gap</th><th class="num">S1</th><th class="num">S2</th><th class="num">S3</th><th class="num">Ideal</th><th>Tyre</th></tr>' +
+    rows.map((r, i) => {
+      const x = d(r.n), st = (S.stintsCache || []).find(s => s.driver_number === r.n && r.b.lap_number >= s.lap_start && r.b.lap_number <= s.lap_end);
+      const ty = st ? tyre(st.compound) : null;
+      return `<tr><td class="num">${i + 1}</td><td><span class="drv" style="--c:${x.color}"><i></i>${esc(x.acr)}</span></td><td>${badge(x)}</td><td class="num">${r.b.lap_number}</td>
+        <td class="num ${i === 0 ? 'purple' : ''}">${fmtLap(r.b.lap_duration)}</td><td class="num">${i ? '+' + (r.b.lap_duration - top).toFixed(3) : ''}</td>
+        ${[1, 2, 3].map(k => cell(r.b['duration_sector_' + k], r.pb[k - 1], sb[k - 1])).join('')}
+        <td class="num">${r.ideal ? fmtLap(r.ideal) : '—'}</td><td>${ty ? `<span class="tyre" style="--c:${ty[0]}">${ty[1]}</span>` : ''}</td></tr>`;
+    }).join('');
+  // load stints in background so the tyre column fills in
+  if (!S.stintsCache || S.stintsKey !== S.session.session_key) loadStints().then(() => { if (S.tab === 'laps') renderLaps(); }).catch(() => {});
+}
+
+/* ---------- strategy ---------- */
+async function loadStints(){
+  const key = S.session.session_key;
+  const st = await api('stints?session_key=' + key, 'tyre stints');
+  if (key === S.session.session_key){ S.stintsCache = st; S.stintsKey = key; }
+  return st;
+}
+async function renderStrategy(){
+  const st = await loadStints();
+  if (S.tab !== 'strategy') return;
+  const total = Math.max(1, ...st.map(s => s.lap_end || 0), ...S.laps.map(l => l.lap_number));
+  $('tyreLegend').innerHTML = Object.entries(TYRES).map(([k, [col, l]]) => `<span style="display:inline-flex;gap:6px;align-items:center"><span class="tyre" style="--c:${col}">${l}</span>${k[0] + k.slice(1).toLowerCase()}</span>`).join('') +
+    '<span style="display:inline-flex;gap:6px;align-items:center"><span style="width:22px;height:12px;border-radius:2px;background:#ccc repeating-linear-gradient(135deg,rgba(0,0,0,.25) 0 4px,transparent 4px 8px)"></span>Used set</span>';
+  if (!st.length){ $('strat').innerHTML = '<div class="empty">No tyre data for this session.</div>'; $('stratAxis').innerHTML = ''; return; }
+  $('strat').innerHTML = S.order.map(n => {
+    const x = d(n), mine = st.filter(s => s.driver_number === n).sort((a, b) => a.stint_number - b.stint_number);
+    if (!mine.length) return '';
+    return `<div class="srow"><span class="drv" style="--c:${x.color}"><i></i>${esc(x.acr)}</span><div class="strack">` + mine.map(s => {
+      const a = (s.lap_start || 1) - 1, e = s.lap_end || a + 1, [col, l] = tyre(s.compound);
+      return `<div class="stint ${s.tyre_age_at_start > 0 ? 'used' : ''}" title="${esc(x.acr)} · ${esc(s.compound)} · laps ${s.lap_start}–${s.lap_end} · ${s.tyre_age_at_start ?? 0} laps old at start"
+        style="left:${a / total * 100}%;width:calc(${(e - a) / total * 100}% - 2px);background-color:${col};color:${l === 'W' ? '#fff' : '#0a0b0e'}">${l} ${e - a}</div>`;
+    }).join('') + '</div></div>';
+  }).join('');
+  const ticks = [0, .25, .5, .75, 1].map(f => Math.round(f * total));
+  $('stratAxis').innerHTML = ticks.map(t => `<span>${t ? 'L' + t : 'Start'}</span>`).join('');
+}
+
+/* ---------- positions ---------- */
+async function renderPositions(){
+  if (!isRace()){ killOne('cPos'); $('v-positions').querySelector('.box').innerHTML = '<div class="empty">Position changes are shown for races and sprints. Pick a Race or Sprint session.</div>'; return; }
+  const box = $('v-positions').querySelector('.box');
+  if (!$('cPos')) box.innerHTML = '<div class="cv" style="height:460px"><canvas id="cPos"></canvas></div>';
+  const pos = await api('position?session_key=' + S.session.session_key, 'positions');
+  if (S.tab !== 'positions') return;
+  const byDrv = {};
+  pos.forEach(p => (byDrv[p.driver_number] ||= []).push({ t:new Date(p.date).getTime(), p:p.position }));
+  Object.values(byDrv).forEach(a => a.sort((x, y) => x.t - y.t));
+  const seen = new Map();
+  const sets = S.order.map(n => {
+    const arr = byDrv[n] || [], laps = (S.lapsBy[n] || []).filter(l => l.date_start);
+    const data = laps.map(l => {
+      const end = new Date(l.date_start).getTime() + (l.lap_duration || 90) * 1000;
+      let v = null; for (const e of arr){ if (e.t <= end) v = e.p; else break; }
+      return v == null ? null : { x:l.lap_number, y:v };
+    }).filter(Boolean);
+    if (arr.length && data.length) data.unshift({ x:0, y:arr[0].p });
+    const x = d(n); let col = x.color; if (seen.has(col)) col = lighten(col, .5); seen.set(x.color, 1);
+    return { label:x.acr, data, borderColor:col, backgroundColor:col, borderWidth:2, pointRadius:0, tension:.15, stepped:false };
+  }).filter(s => s.data.length);
+  if (!sets.length){ box.innerHTML = '<div class="empty">No position data for this session.</div>'; return; }
+  chart('cPos', { type:'line', data:{ datasets:sets }, options:{ animation:false, parsing:false, maintainAspectRatio:false,
+    interaction:{ mode:'nearest', intersect:false },
+    plugins:{ legend:{ position:'right', labels:{ boxWidth:10, padding:6 } }, tooltip:{ callbacks:{ label:i => `${i.dataset.label}  P${i.parsed.y}` } } },
+    scales:{ x:{ type:'linear', title:{ display:true, text:'Lap' } }, y:{ reverse:true, min:1, max:Math.max(20, sets.length), ticks:{ stepSize:1, callback:v => 'P' + v } } } } });
+}
+function killOne(id){ if (charts[id]){ charts[id].destroy(); delete charts[id]; } }
+
+/* ---------- weather ---------- */
+async function renderWeather(){
+  const wx = (await api('weather?session_key=' + S.session.session_key, 'weather')).slice().sort((a, b) => new Date(a.date) - new Date(b.date));
+  if (S.tab !== 'weather') return;
+  if (!wx.length){ $('wxStats').innerHTML = '<div class="empty" style="grid-column:1/-1">No weather data for this session.</div>'; killOne('cWx'); killOne('cWind'); return; }
+  const t0 = new Date(wx[0].date).getTime(), mins = w => (new Date(w.date).getTime() - t0) / 60000;
+  const avg = k => wx.reduce((s, w) => s + (w[k] || 0), 0) / wx.length;
+  const rain = wx.some(w => w.rainfall);
+  $('wxStats').innerHTML = [
+    ['Air', avg('air_temperature').toFixed(1) + '<small> °C avg</small>'], ['Track', avg('track_temperature').toFixed(1) + '<small> °C avg</small>'],
+    ['Track peak', Math.max(...wx.map(w => w.track_temperature || 0)).toFixed(1) + '<small> °C</small>'],
+    ['Humidity', avg('humidity').toFixed(0) + '<small> %</small>'], ['Wind', avg('wind_speed').toFixed(1) + '<small> m/s</small>'],
+    ['Rain', rain ? '<span style="color:#5aa2ff">Yes</span>' : 'Dry']
+  ].map(([k, v]) => `<div class="stat"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
+  const base = { animation:false, parsing:false, maintainAspectRatio:false, interaction:{ mode:'index', intersect:false },
+    plugins:{ legend:{ position:'bottom' } }, scales:{ x:{ type:'linear', title:{ display:true, text:'Minutes into session' } } } };
+  chart('cWx', { type:'line', data:{ datasets:[
+    { label:'Track', data:wx.map(w => ({ x:mins(w), y:w.track_temperature })), borderColor:'#ff6b3d', backgroundColor:'rgba(255,107,61,.12)', fill:'start', pointRadius:0, borderWidth:2, tension:.3 },
+    { label:'Air', data:wx.map(w => ({ x:mins(w), y:w.air_temperature })), borderColor:'#5aa2ff', backgroundColor:'#5aa2ff', pointRadius:0, borderWidth:2, tension:.3 } ] }, options:base });
+  chart('cWind', { type:'line', data:{ datasets:[
+    { label:'Wind m/s', data:wx.map(w => ({ x:mins(w), y:w.wind_speed })), borderColor:'#cfd5de', backgroundColor:'#cfd5de', pointRadius:0, borderWidth:1.6, yAxisID:'y' },
+    { label:'Humidity %', data:wx.map(w => ({ x:mins(w), y:w.humidity })), borderColor:'#20d46b', backgroundColor:'#20d46b', pointRadius:0, borderWidth:1.6, yAxisID:'y2' } ] },
+    options:{ ...base, scales:{ ...base.scales, y:{ position:'left' }, y2:{ position:'right', grid:{ display:false } } } } });
+}
+
+/* ---------- race control ---------- */
+const FLAG_STYLE = { GREEN:['#20d46b','#0a0b0e'], CLEAR:['#20d46b','#0a0b0e'], YELLOW:['#ffd60a','#0a0b0e'], 'DOUBLE YELLOW':['#ffd60a','#0a0b0e'],
+  RED:['#e10600','#fff'], BLUE:['#2f7cf6','#fff'], CHEQUERED:['#fff','#0a0b0e'], 'BLACK AND WHITE':['#fff','#0a0b0e'] };
+async function renderControl(){
+  const rc = (await api('race_control?session_key=' + S.session.session_key, 'race control')).slice().sort((a, b) => new Date(a.date) - new Date(b.date));
+  if (S.tab !== 'control') return;
+  if (!rc.length){ $('rc').innerHTML = '<div class="empty">No race control messages for this session.</div>'; return; }
+  $('rc').innerHTML = rc.map(m => {
+    let label = m.flag || m.category || '', st = FLAG_STYLE[(m.flag || '').toUpperCase()];
+    if (/safety car/i.test(m.message || '')){ label = /virtual/i.test(m.message) ? 'VSC' : 'SAFETY CAR'; st = ['#ff9f1a','#0a0b0e']; }
+    const t = new Date(m.date).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+    return `<div class="msg"><span class="when">${t}</span><span class="when">${m.lap_number ? 'L' + m.lap_number : ''}</span>
+      <span class="flag" style="${st ? `background:${st[0]};color:${st[1]}` : ''}">${esc(label.toUpperCase())}</span><span class="text">${esc(m.message)}</span></div>`;
+  }).join('');
+}
+
+/* ---------- schedule ---------- */
+function renderSchedule(){
+  $('sched').innerHTML = S.meetings.map(m => {
+    const done = new Date(m.date_start) < Date.now(), cur = S.meeting && m.meeting_key === S.meeting.meeting_key;
+    const dt = new Date(m.date_start).toLocaleDateString(undefined, { day:'numeric', month:'short' });
+    return `<button class="ev ${cur ? 'cur' : ''}" data-k="${m.meeting_key}" ${done ? '' : 'disabled'}>
+      <span class="r">${m._round ? 'Round ' + m._round : 'Testing'}<span>${done ? dt : 'Upcoming · ' + dt}</span></span>
+      <span class="n">${esc(m.meeting_name)}</span><span class="c">${esc(m.circuit_short_name || '')} · ${esc(m.country_name || '')}</span></button>`;
+  }).join('');
+  $('sched').querySelectorAll('.ev:not(:disabled)').forEach(b => b.onclick = () => { showTab('telemetry'); loadMeeting(+b.dataset.k).catch(fail); });
+}
+
+$('towerMore').onclick = () => {
+  const t = document.querySelector('.tower'), open = t.classList.toggle('open');
+  $('towerMore').textContent = open ? 'Top 3' : 'Show all';
+  $('towerMore').setAttribute('aria-expanded', open);
+};
+if (!window.Chart){ lastErr = 'Charts library did not load. Check your internet connection and reload.'; busy(); }
+init().catch(fail);
+</script>
+</body>
+</html>
